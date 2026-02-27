@@ -1,0 +1,63 @@
+name: Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-14
+            arch: aarch64
+            platform: macos-aarch64
+            ext: dylib
+          - os: ubuntu-latest
+            arch: linux-x86_64
+            platform: linux-x86_64
+            ext: so
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '25'
+          distribution: 'graalvm'
+
+      - name: Build native library
+        run: ./gradlew :core:nativeCompile
+
+      - name: Package artifacts
+        run: |
+          cd core/build/native/nativeCompile
+          tar czf yaci-bridge-${{ github.ref_name }}-${{ matrix.platform }}.tar.gz \
+            libyaci.${{ matrix.ext }} libyaci.h graal_isolate.h
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: yaci-bridge-${{ matrix.platform }}
+          path: core/build/native/nativeCompile/yaci-bridge-*.tar.gz
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: sha256sum yaci-bridge-*.tar.gz > SHA256SUMS
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            yaci-bridge-*.tar.gz
+            SHA256SUMS
+          generate_release_notes: true

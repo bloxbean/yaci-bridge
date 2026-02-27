@@ -1,0 +1,59 @@
+plugins {
+    id 'java'
+    id 'org.graalvm.buildtools.native'
+}
+
+base.archivesName = 'yaci-bridge-core'
+
+def yaciVersion = '0.4.0'
+
+dependencies {
+    // Yaci
+    implementation "com.bloxbean.cardano:yaci-core:${yaciVersion}"
+    implementation "com.bloxbean.cardano:yaci-helper:${yaciVersion}"
+
+    // GraalVM SDK for @CEntryPoint, CCharPointer, etc.
+    compileOnly "org.graalvm.sdk:nativeimage:25.0.0"
+    compileOnly "org.graalvm.sdk:word:25.0.0"
+
+    // Jackson for JSON serialization
+    implementation 'com.fasterxml.jackson.core:jackson-databind:2.17.0'
+
+    // SLF4J NOP - avoids log framework init issues in native image
+    implementation 'org.slf4j:slf4j-nop:2.0.11'
+
+    // Test
+    testImplementation platform('org.junit:junit-bom:5.10.0')
+    testRuntimeOnly 'org.slf4j:slf4j-simple:2.0.11'
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+graalvmNative {
+    binaries {
+        main {
+            sharedLibrary = true
+            imageName = 'libyaci'
+            buildArgs.addAll(
+                '--no-fallback',
+                '-H:+ReportExceptionStackTraces',
+                '--initialize-at-build-time=org.slf4j',
+                '--initialize-at-build-time=co.nstant.in.cbor',
+                '--initialize-at-build-time=com.fasterxml.jackson',
+                '--initialize-at-build-time=io.netty.util.internal.logging',
+                '-H:+AddAllCharsets',
+                '--enable-url-protocols=http,https',
+            )
+        }
+    }
+}
+
+configurations.testRuntimeClasspath {
+    // Prefer slf4j-simple over slf4j-nop for test logging
+    exclude group: 'org.slf4j', module: 'slf4j-nop'
+}
+
+test {
+    useJUnitPlatform()
+    systemProperty 'org.slf4j.simpleLogger.defaultLogLevel', 'debug'
+}

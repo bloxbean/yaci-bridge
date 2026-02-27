@@ -1,0 +1,4 @@
+rootProject.name = 'yaci-bridge'
+
+include 'core'
+include 'wrappers:python'
