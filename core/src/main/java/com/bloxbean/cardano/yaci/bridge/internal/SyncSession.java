@@ -13,6 +13,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 public class SyncSession {
     private final int id;
@@ -21,6 +22,8 @@ public class SyncSession {
     private volatile boolean started;
     // Suppresses disconnect events fired during agent initialization (before handshake)
     private volatile boolean initialized;
+    // Ensures only one DisconnectEvent per connection loss; reset when data flows again
+    private final AtomicBoolean disconnectSent = new AtomicBoolean(false);
 
     public SyncSession(int id, String host, int port, long protocolMagic,
                        long wellKnownSlot, String wellKnownHash) {
@@ -66,6 +69,7 @@ public class SyncSession {
         return new BlockChainDataListener() {
             @Override
             public void onBlock(Era era, Block block, List<Transaction> transactions) {
+                disconnectSent.set(false);
                 long slot = block.getHeader().getHeaderBody().getSlot();
                 String hash = block.getHeader().getHeaderBody().getBlockHash();
                 long blockNumber = block.getHeader().getHeaderBody().getBlockNumber();
@@ -78,13 +82,15 @@ public class SyncSession {
 
             @Override
             public void onRollback(Point point) {
+                disconnectSent.set(false);
                 eventQueue.offer(new RollbackEvent(point.getSlot(), point.getHash()));
             }
 
             @Override
             public void onDisconnect() {
-                // Ignore disconnect events during agent initialization
-                if (initialized) {
+                // Ignore disconnect events during agent initialization;
+                // deduplicate: yaci fires onDisconnect once per internal agent
+                if (initialized && disconnectSent.compareAndSet(false, true)) {
                     eventQueue.offer(new DisconnectEvent());
                 }
             }

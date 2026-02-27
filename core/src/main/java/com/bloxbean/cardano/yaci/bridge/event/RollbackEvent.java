@@ -1,5 +1,7 @@
 package com.bloxbean.cardano.yaci.bridge.event;
 
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 public class RollbackEvent extends SyncEvent {
@@ -7,7 +9,12 @@ public class RollbackEvent extends SyncEvent {
 
     public RollbackEvent(long slot, String hash) {
         super("rollback");
-        this.point = Map.of("slot", slot, "hash", hash);
+        var map = new HashMap<String, Object>();
+        map.put("slot", slot);
+        if (hash != null) {
+            map.put("hash", hash);
+        }
+        this.point = Collections.unmodifiableMap(map);
     }
 
     public Map<String, Object> getPoint() { return point; }

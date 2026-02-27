@@ -13,6 +13,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeoutException;
 
 public final class PeerDiscoveryApi {
 
@@ -38,7 +39,11 @@ public final class PeerDiscoveryApi {
             peerDiscovery = new PeerDiscovery(host, port, protocolMagic, requestAmount);
 
             Duration timeout = Duration.ofMillis(timeoutMs > 0 ? timeoutMs : 30000);
-            List<PeerAddress> peers = peerDiscovery.discover().block(timeout);
+            // Use Mono.timeout() so a TCP drop (which orphans the MonoSink) throws
+            // TimeoutException instead of hanging for the full block() duration.
+            List<PeerAddress> peers = peerDiscovery.discover()
+                    .timeout(timeout)
+                    .block();
 
             if (peers == null) {
                 peers = List.of();
@@ -56,12 +61,18 @@ public final class PeerDiscoveryApi {
             ResultState.set(JsonHelper.toJson(result));
             return ErrorCodes.YACI_SUCCESS;
         } catch (Exception e) {
-            String msg = e.getMessage();
-            if (msg != null && msg.contains("timeout")) {
-                ErrorState.set("Peer discovery timed out: " + msg);
+            // Unwrap Reactor exceptions — the real cause is often wrapped
+            Throwable cause = e;
+            while (cause.getCause() != null && cause.getCause() != cause) {
+                cause = cause.getCause();
+            }
+            if (cause instanceof TimeoutException || e instanceof TimeoutException) {
+                ErrorState.set("Peer discovery timed out after " + (timeoutMs > 0 ? timeoutMs : 30000) + "ms"
+                        + " (node may not support PeerSharing)");
                 return ErrorCodes.YACI_ERROR_TIMEOUT;
             }
-            ErrorState.set("Peer discovery error: " + (msg != null ? msg : e.getClass().getName()));
+            String msg = cause.getMessage();
+            ErrorState.set("Peer discovery error: " + (msg != null ? msg : cause.getClass().getName()));
             return ErrorCodes.YACI_ERROR_CONNECTION;
         } finally {
             if (peerDiscovery != null) {
