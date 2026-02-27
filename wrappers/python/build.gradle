@@ -1,0 +1,26 @@
+// Python wrapper build — copies native lib and runs pytest
+
+def libDir = project(':core').layout.buildDirectory.dir('native/nativeCompile')
+
+tasks.register('copyLib', Copy) {
+    dependsOn ':core:nativeCompile'
+    from libDir
+    into layout.projectDirectory.dir('yaci/lib')
+    include '*.dylib', '*.so', '*.dll'
+}
+
+tasks.register('test', Exec) {
+    dependsOn 'copyLib'
+    workingDir layout.projectDirectory
+    environment 'PYTHONPATH', layout.projectDirectory.asFile.absolutePath
+    environment 'YACI_LIB_PATH', layout.projectDirectory.dir('yaci/lib').asFile.absolutePath
+
+    def os = System.getProperty('os.name').toLowerCase()
+    if (os.contains('mac')) {
+        environment 'DYLD_LIBRARY_PATH', layout.projectDirectory.dir('yaci/lib').asFile.absolutePath
+    } else {
+        environment 'LD_LIBRARY_PATH', layout.projectDirectory.dir('yaci/lib').asFile.absolutePath
+    }
+
+    commandLine 'python3', '-m', 'pytest', 'tests/', '-v'
+}
