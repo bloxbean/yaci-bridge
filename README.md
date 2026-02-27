@@ -1,4 +1,4 @@
-# Yaci Bridge
+# Yaci Bridge (WIP)
 
 A native shared library that exposes [Yaci](https://github.com/bloxbean/yaci) (a Java implementation of Cardano
 mini-protocols) to non-Java languages. The library is compiled with GraalVM Native Image and ships with a
