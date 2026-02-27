@@ -3,8 +3,8 @@ from yaci import YaciBridge, BlockSyncListener, Point, NetworkType
 
 class MyListener(BlockSyncListener):
     def on_block(self, era, block):
-        print(f"Block #{block['blockNumber']} slot={block['slot']} era={era} "
-              f"txs={len(block.get('transactions', []))}")
+        print(f"Block #{block.block_number} slot={block.slot} era={era} "
+              f"txs={len(block.transactions)}")
 
     def on_rollback(self, point):
         print(f"Rollback to slot {point['slot']}")
