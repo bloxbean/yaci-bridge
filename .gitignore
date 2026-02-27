@@ -42,7 +42,5 @@ bin/
 ### Mac OS ###
 .DS_Store
 /.idea/
-/wrappers/rust/target/
-wrappers/python/ccl/__pycache__/
+wrappers/python/yaci/__pycache__/
 wrappers/python/tests/__pycache__/
-wrappers/js/node_modules/

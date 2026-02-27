@@ -28,16 +28,58 @@ All four APIs work over **N2N (node-to-node TCP)** and can connect to any Cardan
 
 ### Install
 
-There is no pip package yet. Clone this repo and point `YACI_LIB_PATH` at the native library:
+#### Option 1: pip install (recommended)
+
+Clone this repo and install the Python wrapper with pip:
 
 ```bash
 git clone https://github.com/bloxbean/yaci-bridge.git
 cd yaci-bridge
+
+# Editable install (changes to the wrapper reflect immediately — best for development)
+pip install -e wrappers/python
+
+# Or regular install (copies into site-packages)
+pip install wrappers/python
 ```
 
-If you have a pre-built library, set the path:
+Then set the path to the native library:
 
 ```bash
+export YACI_LIB_PATH=/path/to/libyaci.dylib   # macOS
+export YACI_LIB_PATH=/path/to/libyaci.so       # Linux
+```
+
+Now you can `import yaci` from any project — no `PYTHONPATH` needed.
+
+#### Option 2: Using from another project
+
+If you have a separate project that needs to use yaci-bridge:
+
+```bash
+# From your project directory, install yaci pointing to the cloned repo
+pip install -e /path/to/yaci-bridge/wrappers/python
+
+# Set the native library path
+export YACI_LIB_PATH=/path/to/libyaci.dylib
+```
+
+```python
+# In your project — just import and use
+from yaci import YaciBridge, NetworkType
+
+with YaciBridge() as bridge:
+    tip = bridge.find_tip("backbone.cardano.iog.io", 3001, NetworkType.MAINNET)
+    print(tip)
+```
+
+#### Option 3: Manual PYTHONPATH
+
+If you prefer not to use pip, clone this repo and point `PYTHONPATH` at the wrapper:
+
+```bash
+git clone https://github.com/bloxbean/yaci-bridge.git
+export PYTHONPATH=/path/to/yaci-bridge/wrappers/python
 export YACI_LIB_PATH=/path/to/libyaci.dylib   # macOS
 export YACI_LIB_PATH=/path/to/libyaci.so       # Linux
 ```
