@@ -134,6 +134,58 @@ public final class BlockSyncApi {
         }
     }
 
+    @CEntryPoint(name = "yaci_block_sync_set_callback")
+    public static int setCallback(IsolateThread thread, int sessionId,
+                                  EventCallback callback) {
+        try {
+            SyncSession session = SessionRegistry.getSync(sessionId);
+            if (session == null) {
+                ErrorState.set("Session not found: " + sessionId);
+                return ErrorCodes.YACI_ERROR_SESSION_NOT_FOUND;
+            }
+            if (session.isStarted()) {
+                ErrorState.set("Cannot set callback after session started: " + sessionId);
+                return ErrorCodes.YACI_ERROR_SESSION_ALREADY_STARTED;
+            }
+
+            if (callback.isNull()) {
+                ErrorState.set("Callback is null");
+                return ErrorCodes.YACI_ERROR_INVALID_ARGUMENT;
+            }
+
+            session.setCallback(callback);
+            return ErrorCodes.YACI_SUCCESS;
+        } catch (Exception e) {
+            ErrorState.set("Failed to set callback: " + e.getMessage());
+            return ErrorCodes.YACI_ERROR_GENERAL;
+        }
+    }
+
+    @CEntryPoint(name = "yaci_block_sync_set_keep_alive_interval")
+    public static int setKeepAliveInterval(IsolateThread thread, int sessionId, long intervalMs) {
+        try {
+            SyncSession session = SessionRegistry.getSync(sessionId);
+            if (session == null) {
+                ErrorState.set("Session not found: " + sessionId);
+                return ErrorCodes.YACI_ERROR_SESSION_NOT_FOUND;
+            }
+            if (session.isStarted()) {
+                ErrorState.set("Cannot set keep-alive interval after session started: " + sessionId);
+                return ErrorCodes.YACI_ERROR_SESSION_ALREADY_STARTED;
+            }
+            if (intervalMs <= 0) {
+                ErrorState.set("Keep-alive interval must be > 0");
+                return ErrorCodes.YACI_ERROR_INVALID_ARGUMENT;
+            }
+
+            session.setKeepAliveInterval(intervalMs);
+            return ErrorCodes.YACI_SUCCESS;
+        } catch (Exception e) {
+            ErrorState.set("Failed to set keep-alive interval: " + e.getMessage());
+            return ErrorCodes.YACI_ERROR_GENERAL;
+        }
+    }
+
     @CEntryPoint(name = "yaci_block_sync_destroy")
     public static int destroy(IsolateThread thread, int sessionId) {
         try {

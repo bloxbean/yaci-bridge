@@ -2,6 +2,7 @@ package com.bloxbean.cardano.yaci.bridge.api;
 
 import com.bloxbean.cardano.yaci.bridge.ErrorCodes;
 import com.bloxbean.cardano.yaci.bridge.util.*;
+import com.bloxbean.cardano.yaci.core.network.NodeClientConfig;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Point;
 import com.bloxbean.cardano.yaci.core.protocol.chainsync.messages.Tip;
 import com.bloxbean.cardano.yaci.helper.TipFinder;
@@ -42,6 +43,78 @@ public final class TipFinderApi {
 
             Point wellKnownPoint = new Point(wellKnownSlot, wellKnownHash);
             tipFinder = new TipFinder(host, port, wellKnownPoint, protocolMagic);
+
+            Duration timeout = Duration.ofMillis(timeoutMs > 0 ? timeoutMs : 30000);
+            Tip tip = tipFinder.find().block(timeout);
+
+            if (tip == null) {
+                ErrorState.set("Tip finder returned null");
+                return ErrorCodes.YACI_ERROR_TIMEOUT;
+            }
+
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("slot", tip.getPoint().getSlot());
+            result.put("hash", tip.getPoint().getHash());
+            result.put("block", tip.getBlock());
+
+            ResultState.set(JsonHelper.toJson(result));
+            return ErrorCodes.YACI_SUCCESS;
+        } catch (Exception e) {
+            String msg = e.getMessage();
+            if (msg != null && msg.contains("timeout")) {
+                ErrorState.set("Tip finder timed out: " + msg);
+                return ErrorCodes.YACI_ERROR_TIMEOUT;
+            }
+            ErrorState.set("Tip finder error: " + (msg != null ? msg : e.getClass().getName()));
+            return ErrorCodes.YACI_ERROR_CONNECTION;
+        } finally {
+            if (tipFinder != null) {
+                try {
+                    tipFinder.shutdown();
+                } catch (Exception ignored) {
+                }
+            }
+        }
+    }
+
+    /**
+     * Blocking one-shot with NodeClientConfig: connect, find current tip, disconnect.
+     * Boolean params use int (0=false, non-zero=true) for C ABI compatibility.
+     */
+    @CEntryPoint(name = "yaci_tip_find_with_config")
+    public static int findWithConfig(IsolateThread thread,
+                                     CCharPointer hostPtr, int port, long protocolMagic,
+                                     long wellKnownSlot, CCharPointer wellKnownHashPtr,
+                                     long timeoutMs,
+                                     int autoReconnect,
+                                     int initialRetryDelayMs,
+                                     int maxRetryAttempts,
+                                     int enableConnectionLogging,
+                                     int connectionTimeoutMs) {
+        TipFinder tipFinder = null;
+        try {
+            String host = NativeString.toJavaString(hostPtr);
+            String wellKnownHash = NativeString.toJavaString(wellKnownHashPtr);
+
+            if (host == null || host.isEmpty()) {
+                ErrorState.set("Host is required");
+                return ErrorCodes.YACI_ERROR_INVALID_ARGUMENT;
+            }
+            if (wellKnownHash == null || wellKnownHash.isEmpty()) {
+                ErrorState.set("Well-known hash is required");
+                return ErrorCodes.YACI_ERROR_INVALID_ARGUMENT;
+            }
+
+            NodeClientConfig config = NodeClientConfig.builder()
+                    .autoReconnect(autoReconnect != 0)
+                    .initialRetryDelayMs(initialRetryDelayMs)
+                    .maxRetryAttempts(maxRetryAttempts)
+                    .enableConnectionLogging(enableConnectionLogging != 0)
+                    .connectionTimeoutMs(connectionTimeoutMs)
+                    .build();
+
+            Point wellKnownPoint = new Point(wellKnownSlot, wellKnownHash);
+            tipFinder = new TipFinder(host, port, wellKnownPoint, protocolMagic, config);
 
             Duration timeout = Duration.ofMillis(timeoutMs > 0 ? timeoutMs : 30000);
             Tip tip = tipFinder.find().block(timeout);
