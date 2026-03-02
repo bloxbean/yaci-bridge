@@ -5,7 +5,7 @@ plugins {
 
 base.archivesName = 'yaci-bridge-core'
 
-def yaciVersion = '0.4.0'
+def yaciVersion = '0.4.1-340f472-SNAPSHOT'
 
 dependencies {
     // Yaci

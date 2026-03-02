@@ -4,8 +4,8 @@ A native shared library that exposes [Yaci](https://github.com/bloxbean/yaci) (a
 mini-protocols) to non-Java languages. The library is compiled with GraalVM Native Image and ships with a
 ready-to-use **Python wrapper**.
 
-You do **not** need Java or GraalVM to use the Python wrapper — just download the pre-built native library for your
-platform and start syncing blocks.
+You do **not** need Java or GraalVM at runtime — just build the native library once (see
+[Building from Source](#building-from-source)) and start syncing blocks.
 
 ## Features
 
@@ -14,9 +14,85 @@ platform and start syncing blocks.
 | **TipFinder** | One-shot query — connect, get current chain tip, disconnect |
 | **BlockSync** | Long-running chain sync — streams blocks from any point or the current tip |
 | **BlockRangeSync** | Bounded fetch — download a specific range of blocks |
+| **GenesisBlockFinder** | One-shot query — discover genesis block and first block of any chain |
 | **PeerDiscovery** | One-shot query — discover peer addresses via PeerSharing |
 
-All four APIs work over **N2N (node-to-node TCP)** and can connect to any Cardano relay or node.
+All APIs work over **N2N (node-to-node TCP)** and can connect to any Cardano relay or node,
+including custom/dev networks with arbitrary protocol magic.
+
+## Building from Source
+
+Building the native library requires GraalVM with Native Image support.
+
+### Prerequisites
+
+- **GraalVM JDK 25+** with Native Image
+- **Gradle** (wrapper included — no separate install needed)
+
+### Install GraalVM
+
+Using [SDKMAN](https://sdkman.io/) (recommended):
+
+```bash
+sdk install java 25.0.2-graal
+sdk use java 25.0.2-graal
+```
+
+Or download directly from [oracle.com/java/technologies/downloads](https://www.oracle.com/java/technologies/downloads/).
+
+Verify your setup:
+
+```bash
+java -version
+# Should show: java version "25.x.x" ... Oracle GraalVM ...
+
+native-image --version
+# Should show: native-image 25.x.x
+```
+
+### Build the Native Library
+
+```bash
+# Clone the repository
+git clone https://github.com/bloxbean/yaci-bridge.git
+cd yaci-bridge
+
+# Build the shared library
+./gradlew :core:nativeCompile
+```
+
+The build takes about 40-60 seconds. Once complete, the shared library can be found at:
+
+```
+core/build/native/nativeCompile/libyaci.dylib   # macOS (arm64 / x86_64)
+core/build/native/nativeCompile/libyaci.so       # Linux
+```
+
+Copy this file wherever you need it, or point `YACI_LIB_PATH` to it:
+
+```bash
+export YACI_LIB_PATH=$(pwd)/core/build/native/nativeCompile/libyaci.dylib   # macOS
+export YACI_LIB_PATH=$(pwd)/core/build/native/nativeCompile/libyaci.so       # Linux
+```
+
+Or use Make:
+
+```bash
+make build          # Build native library
+make test-python    # Run Python tests
+make test-all       # Build + test
+make clean          # Clean everything
+```
+
+### Run JVM Tests (Java developers)
+
+The JVM tests verify the core Java code works before native compilation:
+
+```bash
+./gradlew :core:test
+```
+
+These tests also connect to public Cardano relays.
 
 ## Quick Start (Python)
 
@@ -24,7 +100,7 @@ All four APIs work over **N2N (node-to-node TCP)** and can connect to any Cardan
 
 - Python 3.9+
 - `pytest` (for running tests): `pip install pytest`
-- The pre-built `libyaci` shared library for your platform, **or** build it from source (see [Building from Source](#building-from-source))
+- The `libyaci` native library (see [Building from Source](#building-from-source) above)
 
 ### Install
 
@@ -168,6 +244,51 @@ range_sync.fetch(
 # bridge.close()
 ```
 
+### Custom Networks (DevKit / Devnets)
+
+All APIs accept an `int` protocol magic instead of `NetworkType` for custom networks.
+For `BlockSync` and `TipFinder`, you also need a well-known point — use `GenesisBlockFinder`
+to discover it automatically:
+
+```python
+from yaci import YaciBridge, BlockSyncListener
+
+bridge = YaciBridge()
+
+# Step 1: Discover the genesis block
+genesis = bridge.find_genesis("localhost", 3001, 42)  # protocol magic 42
+wk = genesis.well_known_point()
+
+# Step 2: Use it with BlockSync
+sync = bridge.block_sync("localhost", 3001, 42, well_known_point=wk)
+sync.add_listener(MyListener())
+sync.start(wk)
+
+# BlockRangeSync only needs the protocol magic (no well-known point)
+range_sync = bridge.block_range_sync("localhost", 3001, 42)
+```
+
+### Connection Configuration (NodeClientConfig)
+
+Use `NodeClientConfig` to control connection behavior for `TipFinder` — timeouts,
+auto-reconnect, and retry settings:
+
+```python
+from yaci import YaciBridge, NetworkType, NodeClientConfig
+
+config = NodeClientConfig(
+    auto_reconnect=False,          # Don't retry on disconnect (default: True)
+    max_retry_attempts=2,          # Max 2 retries (default: unlimited)
+    connection_timeout_ms=10000,   # 10s TCP timeout (default: 30000)
+    initial_retry_delay_ms=3000,   # 3s delay before retry (default: 8000)
+    enable_connection_logging=True, # Log connect/disconnect (default: True)
+)
+
+with YaciBridge() as bridge:
+    tip = bridge.find_tip("backbone.cardano.iog.io", 3001, NetworkType.MAINNET,
+                          timeout_ms=15000, node_config=config)
+```
+
 ### Block Data
 
 Each block delivered to `on_block` is a dict containing:
@@ -203,6 +324,9 @@ NetworkType.PREVIEW   # Preview testnet (protocol magic: 2)
 
 Well-known points for each network are built in — the wrapper handles them automatically.
 
+For custom networks (e.g., Yaci DevKit with magic `42`), pass the protocol magic as an `int`
+and use `GenesisBlockFinder` to discover the well-known point. See [Custom Networks](#custom-networks-devkit--devnets).
+
 ### Public Relays
 
 | Network | Host | Port |
@@ -237,79 +361,18 @@ Or use Make from the project root (assumes the library has been built):
 make test-python
 ```
 
-## Building from Source
+## Examples
 
-Building the native library requires GraalVM with Native Image support.
+Ready-to-run Python examples are in the [`examples-py/`](examples-py/) folder — see [`examples-py/README.md`](examples-py/README.md) for details.
 
-### Prerequisites
-
-- **GraalVM JDK 25+** with Native Image
-- **Gradle** (wrapper included — no separate install needed)
-
-### Install GraalVM
-
-Using [SDKMAN](https://sdkman.io/) (recommended):
-
-```bash
-sdk install java 25.0.2-graal
-sdk use java 25.0.2-graal
-```
-
-Or download directly from [oracle.com/java/technologies/downloads](https://www.oracle.com/java/technologies/downloads/).
-
-Verify your setup:
-
-```bash
-java -version
-# Should show: java version "25.x.x" ... Oracle GraalVM ...
-
-native-image --version
-# Should show: native-image 25.x.x
-```
-
-### Build the Native Library
-
-```bash
-# Clone the repository
-git clone https://github.com/bloxbean/yaci-bridge.git
-cd yaci-bridge
-
-# Build the shared library
-./gradlew :core:nativeCompile
-```
-
-The build takes about 40-60 seconds. Once complete, the shared library can be found at:
-
-```
-core/build/native/nativeCompile/libyaci.dylib   # macOS (arm64 / x86_64)
-core/build/native/nativeCompile/libyaci.so       # Linux
-```
-
-Copy this file wherever you need it, or point `YACI_LIB_PATH` to it:
-
-```bash
-export YACI_LIB_PATH=$(pwd)/core/build/native/nativeCompile/libyaci.dylib   # macOS
-export YACI_LIB_PATH=$(pwd)/core/build/native/nativeCompile/libyaci.so       # Linux
-```
-
-Or use Make:
-
-```bash
-make build          # Build native library
-make test-python    # Run Python tests
-make test-all       # Build + test
-make clean          # Clean everything
-```
-
-### Run JVM Tests (Java developers)
-
-The JVM tests verify the core Java code works before native compilation:
-
-```bash
-./gradlew :core:test
-```
-
-These tests also connect to public Cardano relays.
+| Example | Description |
+|---------|-------------|
+| `tip_finder.py` | Query the chain tip (with NodeClientConfig) |
+| `peer_discovery.py` | Discover network peers |
+| `block_sync.py` | Continuous block streaming from a point |
+| `block_sync_from_tip.py` | Stream new blocks from the current tip |
+| `block_range_sync.py` | Fetch a bounded range of blocks |
+| `devnet_sync.py` | Custom devnet sync with GenesisBlockFinder |
 
 ## Project Structure
 
@@ -320,9 +383,10 @@ yaci-bridge/
 │   └── src/main/java/.../bridge/
 │       ├── YaciBridge.java            # Lifecycle entry points
 │       ├── api/
-│       │   ├── TipFinderApi.java      # yaci_tip_find
+│       │   ├── TipFinderApi.java      # yaci_tip_find, yaci_tip_find_with_config
 │       │   ├── BlockSyncApi.java      # yaci_block_sync_*
-│       │   └── BlockRangeSyncApi.java # yaci_block_range_sync_*
+│       │   ├── BlockRangeSyncApi.java # yaci_block_range_sync_*
+│       │   └── GenesisBlockFinderApi.java # yaci_genesis_block_find
 │       ├── internal/                  # Session management & event queues
 │       └── event/                     # Event types & serialization
 ├── wrappers/
@@ -334,7 +398,8 @@ yaci-bridge/
 │       │   ├── tip_finder.py          # TipFinder (one-shot query)
 │       │   ├── peer_discovery.py      # PeerDiscovery (one-shot peer sharing)
 │       │   ├── listener.py            # BlockSyncListener base class
-│       │   ├── models.py              # Point, Tip, PeerAddress, NetworkType
+│       │   ├── genesis_block_finder.py # GenesisBlockFinder (one-shot query)
+│       │   ├── models.py              # Point, Tip, GenesisBlock, NodeClientConfig, ...
 │       │   └── _ffi.py                # Low-level ctypes FFI bindings
 │       └── tests/                     # pytest test suite
 └── Makefile                           # Convenience targets
@@ -376,7 +441,12 @@ bridge = YaciBridge("/path/to/libyaci.dylib")  # Explicit path
 
 bridge.version()                               # Returns version string
 bridge.find_tip(host, port, network)           # One-shot tip query
-bridge.block_sync(host, port, network)         # Create BlockSync
+bridge.find_tip(host, port, network,           # Tip query with connection config
+                node_config=NodeClientConfig(...))
+bridge.find_genesis(host, port, magic)         # Find genesis block (custom networks)
+bridge.block_sync(host, port, network)         # Create BlockSync (5s keep-alive)
+bridge.block_sync(host, port, magic,           # Custom network with well-known point
+                  well_known_point=point)
 bridge.block_range_sync(host, port, network)   # Create BlockRangeSync
 bridge.close()                                 # Release resources
 ```
@@ -406,6 +476,14 @@ sync.start_from_tip()                    # Sync from current tip
 sync.stop()                              # Stop and clean up
 ```
 
+A background keep-alive thread sends periodic messages to prevent the Cardano node from
+dropping idle connections (default: every 5 seconds). This is especially useful when syncing
+from the tip, where blocks may arrive 20+ seconds apart on mainnet. To customize the interval:
+
+```python
+sync = bridge.block_sync(host, port, network, keep_alive_interval_ms=10000)  # 10s
+```
+
 ### BlockRangeSync
 
 ```python
@@ -429,6 +507,36 @@ for peer in peers:
 ```python
 tip = bridge.find_tip(host, port, network, timeout_ms=30000)
 print(tip.slot, tip.hash, tip.block)
+
+# With custom connection config
+config = NodeClientConfig(auto_reconnect=False, connection_timeout_ms=10000)
+tip = bridge.find_tip(host, port, network, node_config=config)
+
+# Custom network
+tip = bridge.find_tip(host, port, 42, well_known_point=genesis.well_known_point())
+```
+
+### GenesisBlockFinder
+
+```python
+genesis = bridge.find_genesis(host, port, protocol_magic)
+print(genesis.genesis_hash)          # Genesis block hash
+print(genesis.first_block_slot)      # First block slot
+print(genesis.first_block_hash)      # First block hash
+print(genesis.first_block_era)       # First block era (e.g., "Byron", "Conway")
+wk = genesis.well_known_point()      # Point for use with block_sync()
+```
+
+### NodeClientConfig
+
+```python
+config = NodeClientConfig(
+    auto_reconnect=True,             # Reconnect on disconnect (default: True)
+    initial_retry_delay_ms=8000,     # Delay before retry (default: 8000)
+    max_retry_attempts=2147483647,   # Max retries (default: unlimited)
+    enable_connection_logging=True,  # Log events (default: True)
+    connection_timeout_ms=30000,     # TCP timeout (default: 30000)
+)
 ```
 
 ## Native C API
@@ -442,11 +550,15 @@ The shared library exports these functions for use from any language with C FFI:
 | `yaci_get_last_error` | Get last error message |
 | `yaci_free_string` | Free a returned string |
 | `yaci_tip_find` | One-shot tip query |
+| `yaci_tip_find_with_config` | Tip query with NodeClientConfig params |
+| `yaci_genesis_block_find` | Find genesis block and first block |
 | `yaci_peer_discovery` | One-shot peer discovery |
 | `yaci_block_sync_create` | Create a sync session |
 | `yaci_block_sync_start` | Start syncing from a point |
 | `yaci_block_sync_start_from_tip` | Start syncing from tip |
 | `yaci_block_sync_poll` | Poll for next event |
+| `yaci_block_sync_set_keep_alive_interval` | Set keep-alive interval (ms) |
+| `yaci_block_sync_set_callback` | Set push-based event callback |
 | `yaci_block_sync_stop` | Stop syncing |
 | `yaci_block_sync_destroy` | Destroy session |
 | `yaci_block_range_sync_create` | Create a range sync session |

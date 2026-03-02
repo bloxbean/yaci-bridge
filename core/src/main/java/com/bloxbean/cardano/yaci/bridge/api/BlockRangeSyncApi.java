@@ -117,6 +117,33 @@ public final class BlockRangeSyncApi {
         }
     }
 
+    @CEntryPoint(name = "yaci_block_range_sync_set_callback")
+    public static int setCallback(IsolateThread thread, int sessionId,
+                                  EventCallback callback) {
+        try {
+            RangeSyncSession session = SessionRegistry.getRange(sessionId);
+            if (session == null) {
+                ErrorState.set("Session not found: " + sessionId);
+                return ErrorCodes.YACI_ERROR_SESSION_NOT_FOUND;
+            }
+            if (session.isStarted()) {
+                ErrorState.set("Cannot set callback after session started: " + sessionId);
+                return ErrorCodes.YACI_ERROR_SESSION_ALREADY_STARTED;
+            }
+
+            if (callback.isNull()) {
+                ErrorState.set("Callback is null");
+                return ErrorCodes.YACI_ERROR_INVALID_ARGUMENT;
+            }
+
+            session.setCallback(callback);
+            return ErrorCodes.YACI_SUCCESS;
+        } catch (Exception e) {
+            ErrorState.set("Failed to set callback: " + e.getMessage());
+            return ErrorCodes.YACI_ERROR_GENERAL;
+        }
+    }
+
     @CEntryPoint(name = "yaci_block_range_sync_stop")
     public static int stop(IsolateThread thread, int sessionId) {
         try {
