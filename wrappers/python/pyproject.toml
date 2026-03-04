@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "yaci"
+name = "yaci-bridge"
 version = "0.0.1"
 description = "Python wrapper for Yaci Bridge — Cardano mini-protocol access"
 requires-python = ">=3.9"
@@ -11,3 +11,6 @@ license = "MIT"
 
 [project.optional-dependencies]
 dev = ["pytest"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["yaci"]

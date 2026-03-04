@@ -47,6 +47,39 @@ class Tip:
     block: int
 
 
+@dataclass
+class GenesisBlock:
+    """Genesis block info returned by GenesisBlockFinder."""
+    genesis_hash: str
+    first_block_slot: int
+    first_block_hash: str
+    first_block_era: str
+
+    def well_known_point(self) -> Point:
+        """Get the first block as a Point, suitable as well-known point for BlockSync."""
+        return Point(slot=self.first_block_slot, hash=self.first_block_hash)
+
+
+@dataclass
+class NodeClientConfig:
+    """Configuration for Yaci node client connections.
+
+    Controls reconnection behavior, timeouts, and logging for TipFinder.
+
+    Attributes:
+        auto_reconnect: Auto-reconnect on disconnect (default True)
+        initial_retry_delay_ms: Delay before first retry in ms (default 8000)
+        max_retry_attempts: Max reconnection attempts (default 2147483647 = unlimited)
+        enable_connection_logging: Log connect/disconnect events (default True)
+        connection_timeout_ms: TCP connection timeout in ms (default 30000)
+    """
+    auto_reconnect: bool = True
+    initial_retry_delay_ms: int = 8000
+    max_retry_attempts: int = 2147483647
+    enable_connection_logging: bool = True
+    connection_timeout_ms: int = 30000
+
+
 # Well-known points for each network (from Yaci Constants class)
 WELL_KNOWN_POINTS = {
     NetworkType.MAINNET: Point(

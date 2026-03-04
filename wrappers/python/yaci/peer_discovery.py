@@ -1,6 +1,7 @@
 """PeerDiscovery wrapper — one-shot peer sharing query."""
 
 import json
+from typing import Union
 from yaci._ffi import YaciLib
 from yaci.models import PeerAddress, NetworkType
 
@@ -8,11 +9,12 @@ from yaci.models import PeerAddress, NetworkType
 class PeerDiscovery:
     """One-shot peer discovery that connects, queries peers, and disconnects."""
 
-    def __init__(self, lib: YaciLib, host: str, port: int, network: NetworkType):
+    def __init__(self, lib: YaciLib, host: str, port: int,
+                 network: Union[NetworkType, int]):
         self._lib = lib
         self._host = host
         self._port = port
-        self._network = network
+        self._protocol_magic = int(network)
 
     def discover(self, request_amount: int = 10, timeout_ms: int = 30000) -> list[PeerAddress]:
         """Discover peers from the connected node via PeerSharing.
@@ -29,7 +31,7 @@ class PeerDiscovery:
             ffi._thread,
             ffi._encode(self._host),
             self._port,
-            int(self._network),
+            self._protocol_magic,
             request_amount,
             timeout_ms,
         )

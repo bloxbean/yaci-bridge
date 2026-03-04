@@ -5,10 +5,12 @@ from yaci.bridge import YaciBridge
 from yaci.tip_finder import TipFinder
 from yaci.block_sync import BlockSync
 from yaci.block_range_sync import BlockRangeSync
+from yaci.genesis_block_finder import GenesisBlockFinder
 from yaci.peer_discovery import PeerDiscovery
 from yaci.listener import BlockSyncListener
 from yaci.models import (
-    Point, Tip, NetworkType, WELL_KNOWN_POINTS,
+    Point, Tip, GenesisBlock, NodeClientConfig,
+    NetworkType, WELL_KNOWN_POINTS,
     PeerAddress,
     Amount, TransactionInput, TransactionOutput, Utxo,
     TransactionBody, TransactionInfo, BlockInfo,
@@ -21,10 +23,13 @@ __all__ = [
     'TipFinder',
     'BlockSync',
     'BlockRangeSync',
+    'GenesisBlockFinder',
     'PeerDiscovery',
     'BlockSyncListener',
     'Point',
     'Tip',
+    'GenesisBlock',
+    'NodeClientConfig',
     'NetworkType',
     'WELL_KNOWN_POINTS',
     'PeerAddress',

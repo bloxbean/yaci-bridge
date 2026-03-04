@@ -1,8 +1,9 @@
 """BlockRangeSync wrapper — bounded block range fetch with listener dispatch."""
 
+import ctypes
 import json
-import threading
-from yaci._ffi import YaciLib
+from typing import Union
+from yaci._ffi import YaciLib, EVENT_CALLBACK
 from yaci.listener import BlockSyncListener
 from yaci.models import Point, NetworkType, BlockInfo
 
@@ -19,15 +20,15 @@ class BlockRangeSync:
         range_sync.stop()
     """
 
-    def __init__(self, lib: YaciLib, host: str, port: int, network: NetworkType):
+    def __init__(self, lib: YaciLib, host: str, port: int,
+                 network: Union[NetworkType, int]):
         self._lib = lib
         self._host = host
         self._port = port
-        self._network = network
+        self._protocol_magic = int(network)
         self._session_id = None
         self._listeners = []
-        self._poll_thread = None
-        self._running = False
+        self._callback_ref = None  # prevent GC of ctypes callback
 
     def add_listener(self, listener: BlockSyncListener):
         """Register a listener for block events."""
@@ -38,12 +39,12 @@ class BlockRangeSync:
         self._listeners.remove(listener)
 
     def start(self):
-        """Create and start the native session, launching the background poll thread."""
+        """Create and start the native session, registering the callback."""
         self._create_session()
+        self._register_callback()
         ffi = self._lib
         rc = ffi._lib.yaci_block_range_sync_start(ffi._thread, self._session_id)
         ffi._check(rc)
-        self._start_polling()
 
     def fetch(self, from_point: Point, to_point: Point):
         """Request a range of blocks.
@@ -68,18 +69,18 @@ class BlockRangeSync:
 
     def stop(self):
         """Stop the session and clean up resources."""
-        self._running = False
-        if self._poll_thread:
-            self._poll_thread.join(timeout=5)
-            self._poll_thread = None
-
         if self._session_id is not None:
             ffi = self._lib
+            try:
+                ffi._lib.yaci_block_range_sync_stop(ffi._thread, self._session_id)
+            except Exception:
+                pass
             try:
                 ffi._lib.yaci_block_range_sync_destroy(ffi._thread, self._session_id)
             except Exception:
                 pass
             self._session_id = None
+            self._callback_ref = None
 
     def _create_session(self):
         ffi = self._lib
@@ -87,41 +88,30 @@ class BlockRangeSync:
             ffi._thread,
             ffi._encode(self._host),
             self._port,
-            int(self._network),
+            self._protocol_magic,
         )
         result = ffi._check(rc)
         self._session_id = int(result)
 
-    def _start_polling(self):
-        self._running = True
-        self._poll_thread = threading.Thread(
-            target=self._poll_loop, daemon=True, name="yaci-range-sync-poll"
-        )
-        self._poll_thread.start()
+    def _make_callback(self):
+        """Create a ctypes callback that dispatches events to listeners."""
+        def _on_event(session_id, event_ptr):
+            try:
+                raw = ctypes.string_at(event_ptr)
+                event = json.loads(raw.decode('utf-8'))
+                self._dispatch(event)
+            except Exception as e:
+                print(f"[yaci] Callback error: {e}", flush=True)
+        return EVENT_CALLBACK(_on_event)
 
-    def _poll_loop(self):
+    def _register_callback(self):
+        """Register the push-based callback with the native session."""
+        self._callback_ref = self._make_callback()
         ffi = self._lib
-        thread = ffi.attach_thread()
-        try:
-            while self._running:
-                try:
-                    rc = ffi._lib.yaci_block_range_sync_poll(
-                        thread, self._session_id, 1000
-                    )
-                    result = ffi._check(rc, thread)
-                    if result:
-                        event = json.loads(result)
-                        self._dispatch(event)
-                except Exception:
-                    if self._running:
-                        for listener in self._listeners:
-                            try:
-                                listener.on_disconnect()
-                            except Exception:
-                                pass
-                        break
-        finally:
-            ffi.detach_thread(thread)
+        rc = ffi._lib.yaci_block_range_sync_set_callback(
+            ffi._thread, self._session_id, self._callback_ref
+        )
+        ffi._check(rc)
 
     def _dispatch(self, event: dict):
         event_type = event.get('type')

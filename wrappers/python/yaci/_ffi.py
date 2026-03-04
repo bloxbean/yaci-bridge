@@ -6,6 +6,10 @@ import sys
 from ctypes import c_int, c_long, c_char_p, c_void_p, POINTER, byref
 
 
+# C function pointer type: void callback(int sessionId, const char* eventJson)
+EVENT_CALLBACK = ctypes.CFUNCTYPE(None, c_int, c_void_p)
+
+
 class YaciLib:
     """Low-level FFI wrapper around libyaci shared library."""
 
@@ -36,6 +40,8 @@ class YaciLib:
             lib_file = os.path.join(lib_path, 'libyaci.so')
 
         self._lib = ctypes.CDLL(lib_file)
+        self._isolate = None
+        self._thread = None
         self._setup_functions()
 
         # Create GraalVM isolate
@@ -86,6 +92,31 @@ class YaciLib:
         ]
         lib.yaci_tip_find.restype = c_int
 
+        lib.yaci_tip_find_with_config.argtypes = [
+            c_void_p,   # thread
+            c_char_p,   # host
+            c_int,      # port
+            c_long,     # protocolMagic
+            c_long,     # wellKnownSlot
+            c_char_p,   # wellKnownHash
+            c_long,     # timeoutMs
+            c_int,      # autoReconnect (0/1)
+            c_int,      # initialRetryDelayMs
+            c_int,      # maxRetryAttempts
+            c_int,      # enableConnectionLogging (0/1)
+            c_int,      # connectionTimeoutMs
+        ]
+        lib.yaci_tip_find_with_config.restype = c_int
+
+        # GenesisBlockFinder API
+        lib.yaci_genesis_block_find.argtypes = [
+            c_void_p,   # thread
+            c_char_p,   # host
+            c_int,      # port
+            c_long,     # protocolMagic
+        ]
+        lib.yaci_genesis_block_find.restype = c_int
+
         # PeerDiscovery API
         lib.yaci_peer_discovery.argtypes = [
             c_void_p,   # thread
@@ -111,8 +142,11 @@ class YaciLib:
         lib.yaci_block_sync_start_from_tip.argtypes = [c_void_p, c_int]
         lib.yaci_block_sync_start_from_tip.restype = c_int
 
-        lib.yaci_block_sync_poll.argtypes = [c_void_p, c_int, c_long]
-        lib.yaci_block_sync_poll.restype = c_int
+        lib.yaci_block_sync_set_callback.argtypes = [c_void_p, c_int, EVENT_CALLBACK]
+        lib.yaci_block_sync_set_callback.restype = c_int
+
+        lib.yaci_block_sync_set_keep_alive_interval.argtypes = [c_void_p, c_int, c_long]
+        lib.yaci_block_sync_set_keep_alive_interval.restype = c_int
 
         lib.yaci_block_sync_stop.argtypes = [c_void_p, c_int]
         lib.yaci_block_sync_stop.restype = c_int
@@ -134,8 +168,8 @@ class YaciLib:
         ]
         lib.yaci_block_range_sync_fetch.restype = c_int
 
-        lib.yaci_block_range_sync_poll.argtypes = [c_void_p, c_int, c_long]
-        lib.yaci_block_range_sync_poll.restype = c_int
+        lib.yaci_block_range_sync_set_callback.argtypes = [c_void_p, c_int, EVENT_CALLBACK]
+        lib.yaci_block_range_sync_set_callback.restype = c_int
 
         lib.yaci_block_range_sync_stop.argtypes = [c_void_p, c_int]
         lib.yaci_block_range_sync_stop.restype = c_int
