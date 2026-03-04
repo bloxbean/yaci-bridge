@@ -25,7 +25,11 @@ def bridge():
 
 def test_discover_peers(bridge):
     """Test that we can discover peers from a mainnet relay."""
-    peers = bridge.discover_peers(NODE_HOST, NODE_PORT, NETWORK, timeout_ms=30000)
+    host = os.environ.get('PEERSHARING_NODE_HOST')
+    if not host:
+        pytest.skip("PEERSHARING_NODE_HOST not set — node must support PeerSharing")
+    port = int(os.environ.get('PEERSHARING_NODE_PORT', '3001'))
+    peers = bridge.discover_peers(host, port, NETWORK, timeout_ms=30000)
     assert isinstance(peers, list)
     assert len(peers) > 0, "Expected at least one peer"
     for peer in peers:
