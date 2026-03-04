@@ -1,8 +1,6 @@
 package com.bloxbean.cardano.yaci.bridge.api;
 
 import com.bloxbean.cardano.yaci.bridge.ErrorCodes;
-import com.bloxbean.cardano.yaci.bridge.event.EventSerializer;
-import com.bloxbean.cardano.yaci.bridge.event.SyncEvent;
 import com.bloxbean.cardano.yaci.bridge.internal.SessionRegistry;
 import com.bloxbean.cardano.yaci.bridge.internal.SyncSession;
 import com.bloxbean.cardano.yaci.bridge.util.*;
@@ -19,6 +17,8 @@ public final class BlockSyncApi {
     public static int create(IsolateThread thread,
                              CCharPointer hostPtr, int port, long protocolMagic,
                              long wellKnownSlot, CCharPointer wellKnownHashPtr) {
+        ErrorState.clear();
+        ResultState.clear();
         try {
             String host = NativeString.toJavaString(hostPtr);
             String wellKnownHash = NativeString.toJavaString(wellKnownHashPtr);
@@ -48,6 +48,8 @@ public final class BlockSyncApi {
     @CEntryPoint(name = "yaci_block_sync_start")
     public static int start(IsolateThread thread, int sessionId,
                             long fromSlot, CCharPointer fromHashPtr) {
+        ErrorState.clear();
+        ResultState.clear();
         try {
             SyncSession session = SessionRegistry.getSync(sessionId);
             if (session == null) {
@@ -57,6 +59,10 @@ public final class BlockSyncApi {
             if (session.isStarted()) {
                 ErrorState.set("Session already started: " + sessionId);
                 return ErrorCodes.YACI_ERROR_SESSION_ALREADY_STARTED;
+            }
+            if (!session.hasCallback()) {
+                ErrorState.set("Callback must be set before starting session: " + sessionId);
+                return ErrorCodes.YACI_ERROR_INVALID_ARGUMENT;
             }
 
             String fromHash = NativeString.toJavaString(fromHashPtr);
@@ -76,6 +82,8 @@ public final class BlockSyncApi {
 
     @CEntryPoint(name = "yaci_block_sync_start_from_tip")
     public static int startFromTip(IsolateThread thread, int sessionId) {
+        ErrorState.clear();
+        ResultState.clear();
         try {
             SyncSession session = SessionRegistry.getSync(sessionId);
             if (session == null) {
@@ -86,6 +94,10 @@ public final class BlockSyncApi {
                 ErrorState.set("Session already started: " + sessionId);
                 return ErrorCodes.YACI_ERROR_SESSION_ALREADY_STARTED;
             }
+            if (!session.hasCallback()) {
+                ErrorState.set("Callback must be set before starting session: " + sessionId);
+                return ErrorCodes.YACI_ERROR_INVALID_ARGUMENT;
+            }
 
             session.startFromTip();
             return ErrorCodes.YACI_SUCCESS;
@@ -95,30 +107,10 @@ public final class BlockSyncApi {
         }
     }
 
-    @CEntryPoint(name = "yaci_block_sync_poll")
-    public static int poll(IsolateThread thread, int sessionId, long timeoutMs) {
-        try {
-            SyncSession session = SessionRegistry.getSync(sessionId);
-            if (session == null) {
-                ErrorState.set("Session not found: " + sessionId);
-                return ErrorCodes.YACI_ERROR_SESSION_NOT_FOUND;
-            }
-
-            SyncEvent event = session.poll(timeoutMs > 0 ? timeoutMs : 1000);
-            if (event == null) {
-                ResultState.set(EventSerializer.timeoutEvent());
-            } else {
-                ResultState.set(EventSerializer.serialize(event));
-            }
-            return ErrorCodes.YACI_SUCCESS;
-        } catch (Exception e) {
-            ErrorState.set("Poll error: " + e.getMessage());
-            return ErrorCodes.YACI_ERROR_GENERAL;
-        }
-    }
-
     @CEntryPoint(name = "yaci_block_sync_stop")
     public static int stop(IsolateThread thread, int sessionId) {
+        ErrorState.clear();
+        ResultState.clear();
         try {
             SyncSession session = SessionRegistry.getSync(sessionId);
             if (session == null) {
@@ -137,6 +129,8 @@ public final class BlockSyncApi {
     @CEntryPoint(name = "yaci_block_sync_set_callback")
     public static int setCallback(IsolateThread thread, int sessionId,
                                   EventCallback callback) {
+        ErrorState.clear();
+        ResultState.clear();
         try {
             SyncSession session = SessionRegistry.getSync(sessionId);
             if (session == null) {
@@ -163,6 +157,8 @@ public final class BlockSyncApi {
 
     @CEntryPoint(name = "yaci_block_sync_set_keep_alive_interval")
     public static int setKeepAliveInterval(IsolateThread thread, int sessionId, long intervalMs) {
+        ErrorState.clear();
+        ResultState.clear();
         try {
             SyncSession session = SessionRegistry.getSync(sessionId);
             if (session == null) {
@@ -188,6 +184,8 @@ public final class BlockSyncApi {
 
     @CEntryPoint(name = "yaci_block_sync_destroy")
     public static int destroy(IsolateThread thread, int sessionId) {
+        ErrorState.clear();
+        ResultState.clear();
         try {
             SyncSession session = SessionRegistry.removeSync(sessionId);
             if (session == null) {

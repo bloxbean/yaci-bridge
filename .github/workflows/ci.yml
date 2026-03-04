@@ -22,7 +22,7 @@ jobs:
           distribution: 'graalvm'
 
       - name: Install pytest
-        run: pip install pytest
+        run: python3 -m pip install pytest
 
       - name: Build native library
         run: ./gradlew :core:nativeCompile

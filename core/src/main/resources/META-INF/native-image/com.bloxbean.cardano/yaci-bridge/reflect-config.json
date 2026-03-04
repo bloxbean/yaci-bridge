@@ -450,6 +450,36 @@
     "allDeclaredFields": true
   },
   {
+    "name": "com.bloxbean.cardano.yaci.core.model.jackson.VoterSerializer",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.core.model.jackson.VoterDeserializer",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.core.model.jackson.GovActionIdSerializer",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.core.model.jackson.GovActionIdDeserializer",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.core.model.jackson.StakeCredentialSerializer",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
+    "name": "com.bloxbean.cardano.yaci.core.model.jackson.StakeCredentialDeserializer",
+    "allDeclaredConstructors": true,
+    "allDeclaredMethods": true
+  },
+  {
     "name": "com.bloxbean.cardano.yaci.core.model.governance.actions.GovAction",
     "allDeclaredConstructors": true,
     "allDeclaredMethods": true,
